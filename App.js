@@ -45,19 +45,14 @@ function Items() {
   const heading = "BMI History";
 
   if (items ===  null || items.length === 0) {
-    // return null;
-    return (
-      <View style={styles.sectionContainer}>
-      <Text style={styles.sectionHeading}>{heading}</Text>
-      </View>
-    )
+    return null;
   }
 
   return (
     <View style={styles.sectionContainer}>
       <Text style={styles.sectionHeading}>{heading}</Text>
       {items.map(({ id, weight, height, results, itemDate }) => (
-        <Text key={id} style={{ color: "#fff" }}>{itemDate}: {results} (W:{weight} H:{height})</Text>
+        <Text key={id} style={{ fontSize: 20 }}>{itemDate}: {results} (W:{weight} H:{height})</Text>
       ))}
     </View>
   );
@@ -66,9 +61,9 @@ function Items() {
 export default function App() {
   const [height, setHeight] = useState(0);
   const [weight, setWeight] = useState(0);
-  const [results, setResults] = useState(0);
   const [resultString, setResultsString] =  useState(null);
   const [forceUpdate, forceUpdateId] = useForceUpdate();
+  let finalResult = 0;
 
   useEffect(() => {
     db.transaction((tx) => {
@@ -76,21 +71,12 @@ export default function App() {
         "drop table bmicalc;"
       ); */
       tx.executeSql(
-        "create table if not exists bmicalc (id integer primary key not null, weight int, height int, results int, itemDate real);"
+        "create table if not exists bmicalc (id integer primary key not null, weight int, height int, results text, itemDate real);"
       );
     });
   }, []);
 
-  const add = (weight, height) => {
-    // is text empty?
-    if (weight === null || weight === "") {
-      return false;
-    }
-
-    if(height === null || height === "") {
-      return false;
-    }
-
+  const onCalcBMI = async () => {
     if(isNaN(weight)) {
       Alert.alert('Error', 'Weight must be a number');
     } else if (isNaN(height)) {
@@ -100,21 +86,33 @@ export default function App() {
     } else if ('' === height) {
       Alert.alert('Error', 'Height is a required field');
     } else {
-      setResults('Loading....');
-      const results = ((weight/(height * height))*703).toFixed(1);
-      const resultString = 'Body Mass Index is ' + results;
-      setResultsString(resultString);
-      setResults(results);
+      finalResult = ((Number(weight)/(Number(height) * Number(height)))*703).toFixed(1);
+      
+      let BMIResult = "";
+
+      if (finalResult < 18.5) {
+        BMIResult = "UnderWeight";
+      } else if (finalResult >= 18.5 && finalResult <= 24.9) {
+        BMIResult = "Healthy";
+      } else if (finalResult >= 25.0 && finalResult <= 29.9) {
+        BMIResult = "OverWeight";
+      } else {
+        BMIResult = "Obese";
+      }
+      
+
+      setResultsString("Body Mass Index is " + finalResult + "\n" + "(" + BMIResult + ")" );
+      
     }
-
-    add2DB();
     
-  };
+  }
 
-  const add2DB = () => {
+  const add = (weight, height) => {
+    // is text empty?
+
     db.transaction(
       (tx) => {
-        tx.executeSql("insert into bmicalc (weight, height, results, itemDate) values (?, ?, ?, julianday('now'))", [weight, height, results]);
+        tx.executeSql("insert into bmicalc (weight, height, results, itemDate) values (?, ?, ?, julianday('now'))", [weight, height, finalResult]);
         tx.executeSql("select * from bmicalc", [], (_, { rows }) =>
           console.log(JSON.stringify(rows))
         );
@@ -122,6 +120,7 @@ export default function App() {
       null,
       forceUpdate
     );
+    
   };
 
   return (
@@ -138,6 +137,7 @@ export default function App() {
         </View>
       ) : (
         <>
+          <ScrollView style={styles.content}>
           <View style={styles.container}>
             <TextInput
               onChangeText={(weight) => setWeight(weight)}
@@ -152,20 +152,21 @@ export default function App() {
             />
             <TouchableOpacity 
               onPress={() => {
-                
+                onCalcBMI();
                 add(weight, height);
-                setHeight(null);
-                setWeight(null);
               }} 
               style={styles.button}>
               <Text style={styles.buttonText}>Compute BMI</Text>
             </TouchableOpacity>
           </View>
+          </ScrollView>
+          
           <TextInput style={styles.preview} value={resultString} placeholder="Results..." editable={false} multiline />
           
           <ScrollView style={styles.listArea}>
             <Items />
           </ScrollView>
+          
         </>
       )}
     </SafeAreaView>
@@ -183,6 +184,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+    paddingTop: Constants.statusBarHeight,
   },
   toolbar: {
     backgroundColor: '#f4511e',
@@ -198,7 +200,7 @@ const styles = StyleSheet.create({
   },
   preview: {
     flex: 1,
-    height: 75,
+    height: 20,
     fontSize: 28,
     textAlign: 'center',
     color: '#000000'
@@ -228,6 +230,19 @@ const styles = StyleSheet.create({
   },
   flexRow: {
     flexDirection: "row",
-  }
+  },
+  sectionHeading: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  sectionContainer: {
+    marginBottom: 16,
+    marginHorizontal: 16,
+  },
+  listArea: {
+    backgroundColor: "#fff",
+    flex: 1,
+    paddingTop: 16,
+  },
 });
 
